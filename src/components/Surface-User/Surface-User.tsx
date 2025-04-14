@@ -355,6 +355,7 @@ const SurfaceWithUser = () => {
       "https://threejs.org/examples/fonts/helvetiker_regular.typeface.json",
       (font) => {
         const createTimerText = (time: number): THREE.Group => {
+          console.log('hi');
           const minutes = Math.floor(time / 60);
           const remainingSeconds = time % 60;
           if (minutes === 0 && remainingSeconds === 0) {
@@ -601,7 +602,7 @@ const SurfaceWithUser = () => {
   useEffect(() => {
     if (!isUserAlive) {
       setTimeout(() => {
-        navigate(`/exit?score=${currentLineCountRef.current}`); // Correct syntax
+        navigate(`/exit?score=${currentLineCountRef.current}`); 
       }, 500);
     }
   }, [isUserAlive, navigate]);
