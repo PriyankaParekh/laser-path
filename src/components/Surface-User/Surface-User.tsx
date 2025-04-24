@@ -46,6 +46,10 @@ const SurfaceWithUser = () => {
   const [isUserAlive, setIsUserAlive] = useState<any>(true);
   const navigate = useNavigate();
 
+  // Add these refs to track active lasers
+  const activeLaserTypesRef = useRef<Set<LaserType>>(new Set());
+  const hasReachedEndRef = useRef<Set<LaserType>>(new Set());
+
   // Particle System for Burning Effect
   const createParticleSystem = (position: THREE.Vector3) => {
     const particleCount = 1000;
@@ -159,73 +163,80 @@ const SurfaceWithUser = () => {
     }
   };
 
-  const makeLine = (scene: THREE.Scene, num: number) => {
-    // Clear existing lines
-    linesRef.current.forEach((line) => {
-      scene.remove(line.mesh);
-    });
-    linesRef.current = [];
-
+  const makeLine = (scene: THREE.Scene | null) => {
     const GRID_SIZE = 10;
 
-    // Get the next laser type based on the current line count
-    const getLaserType = (): LaserType => {
-      const count = currentLineCountRef.current % 4;
-      switch (count) {
-        case 1:
-          return "right-to-left";
-        case 2:
-          return "left-to-right";
-        case 3:
-          return "top-to-bottom";
-        case 0:
-          return "bottom-to-top";
-        default:
-          return "right-to-left";
+    // Helper function to create a new laser line
+    const createLaserLine = (type: LaserType) => {
+      let startPoint, endPoint, speed;
+
+      switch (type) {
+        case "right-to-left":
+          startPoint = { x: GRID_SIZE, y: 0, z: -GRID_SIZE };
+          endPoint = { x: GRID_SIZE, y: 0, z: GRID_SIZE };
+          speed = { x: -0.1, z: 0 };
+          break;
+
+        case "left-to-right":
+          startPoint = { x: -GRID_SIZE, y: 0, z: -GRID_SIZE };
+          endPoint = { x: -GRID_SIZE, y: 0, z: GRID_SIZE };
+          speed = { x: 0.1, z: 0 };
+          break;
+
+        case "top-to-bottom":
+          startPoint = { x: -GRID_SIZE, y: 0, z: -GRID_SIZE };
+          endPoint = { x: GRID_SIZE, y: 0, z: -GRID_SIZE };
+          speed = { x: 0, z: 0.1 };
+          break;
+
+        case "bottom-to-top":
+          startPoint = { x: -GRID_SIZE, y: 0, z: GRID_SIZE };
+          endPoint = { x: GRID_SIZE, y: 0, z: GRID_SIZE };
+          speed = { x: 0, z: -0.1 };
+          break;
       }
+
+      const thickLine = createThickLine(startPoint, endPoint, 0xc30010);
+      scene?.add(thickLine);
+
+      return {
+        mesh: thickLine,
+        startPoint,
+        endPoint,
+        speed,
+        type,
+      };
     };
 
-    const laserType = getLaserType();
-
-    // Configure laser based on type
-    let startPoint, endPoint, speed;
-
-    switch (laserType) {
-      case "right-to-left":
-        startPoint = { x: GRID_SIZE, y: 0, z: -GRID_SIZE };
-        endPoint = { x: GRID_SIZE, y: 0, z: GRID_SIZE };
-        speed = { x: -0.1, z: 0 };
-        break;
-
-      case "left-to-right":
-        startPoint = { x: -GRID_SIZE, y: 0, z: -GRID_SIZE };
-        endPoint = { x: -GRID_SIZE, y: 0, z: GRID_SIZE };
-        speed = { x: 0.1, z: 0 };
-        break;
-
-      case "top-to-bottom":
-        startPoint = { x: -GRID_SIZE, y: 0, z: -GRID_SIZE };
-        endPoint = { x: GRID_SIZE, y: 0, z: -GRID_SIZE };
-        speed = { x: 0, z: 0.1 };
-        break;
-
-      case "bottom-to-top":
-        startPoint = { x: -GRID_SIZE, y: 0, z: GRID_SIZE };
-        endPoint = { x: GRID_SIZE, y: 0, z: GRID_SIZE };
-        speed = { x: 0, z: -0.1 };
-        break;
+    // Create new lasers based on which ones should be active
+    if (!activeLaserTypesRef.current.has("right-to-left")) {
+      activeLaserTypesRef.current.add("right-to-left");
+      linesRef.current.push(createLaserLine("right-to-left"));
     }
 
-    const thickLine = createThickLine(startPoint, endPoint, 0xc30010);
-    scene.add(thickLine);
+    if (
+      hasReachedEndRef.current.has("right-to-left") &&
+      !activeLaserTypesRef.current.has("left-to-right")
+    ) {
+      activeLaserTypesRef.current.add("left-to-right");
+      linesRef.current.push(createLaserLine("left-to-right"));
+    }
 
-    linesRef.current.push({
-      mesh: thickLine,
-      startPoint,
-      endPoint,
-      speed,
-      type: laserType,
-    });
+    if (
+      hasReachedEndRef.current.has("left-to-right") &&
+      !activeLaserTypesRef.current.has("top-to-bottom")
+    ) {
+      activeLaserTypesRef.current.add("top-to-bottom");
+      linesRef.current.push(createLaserLine("top-to-bottom"));
+    }
+
+    if (
+      hasReachedEndRef.current.has("top-to-bottom") &&
+      !activeLaserTypesRef.current.has("bottom-to-top")
+    ) {
+      activeLaserTypesRef.current.add("bottom-to-top");
+      linesRef.current.push(createLaserLine("bottom-to-top"));
+    }
   };
 
   function createThickLine(startPoint: any, endPoint: any, color = 0xff0000) {
@@ -265,60 +276,58 @@ const SurfaceWithUser = () => {
   const animateLines = () => {
     if (!sceneRef.current) return;
 
-    const linesToRemove: number[] = [];
     const GRID_SIZE = 10;
 
-    linesRef.current.forEach((line, index) => {
-      // Remove old line
+    // Update each laser's position
+    linesRef.current.forEach((line) => {
       sceneRef.current!.remove(line.mesh);
 
-      // Update positions based on laser type
+      // Reset laser position when it reaches the end
+      switch (line.type) {
+        case "right-to-left":
+          if (line.startPoint.x <= -GRID_SIZE) {
+            line.startPoint.x = GRID_SIZE;
+            line.endPoint.x = GRID_SIZE;
+            hasReachedEndRef.current.add("right-to-left");
+            makeLine(sceneRef.current); // Try to spawn next laser
+          }
+          break;
+        case "left-to-right":
+          if (line.startPoint.x >= GRID_SIZE) {
+            line.startPoint.x = -GRID_SIZE;
+            line.endPoint.x = -GRID_SIZE;
+            hasReachedEndRef.current.add("left-to-right");
+            makeLine(sceneRef.current); // Try to spawn next laser
+          }
+          break;
+        case "top-to-bottom":
+          if (line.startPoint.z >= GRID_SIZE) {
+            line.startPoint.z = -GRID_SIZE;
+            line.endPoint.z = -GRID_SIZE;
+            hasReachedEndRef.current.add("top-to-bottom");
+            makeLine(sceneRef.current); // Try to spawn next laser
+          }
+          break;
+        case "bottom-to-top":
+          if (line.startPoint.z <= -GRID_SIZE) {
+            line.startPoint.z = GRID_SIZE;
+            line.endPoint.z = GRID_SIZE;
+            hasReachedEndRef.current.add("bottom-to-top");
+          }
+          break;
+      }
+
+      // Update positions
       line.startPoint.x += line.speed.x;
       line.endPoint.x += line.speed.x;
       line.startPoint.z += line.speed.z;
       line.endPoint.z += line.speed.z;
 
-      // Check if laser has reached its end position
-      let shouldRemove = false;
-      switch (line.type) {
-        case "right-to-left":
-          shouldRemove = line.startPoint.x < -GRID_SIZE;
-          break;
-        case "left-to-right":
-          shouldRemove = line.startPoint.x > GRID_SIZE;
-          break;
-        case "top-to-bottom":
-          shouldRemove = line.startPoint.z > GRID_SIZE;
-          break;
-        case "bottom-to-top":
-          shouldRemove = line.startPoint.z < -GRID_SIZE;
-          break;
-      }
-
-      if (shouldRemove) {
-        linesToRemove.push(index);
-      } else {
-        // Create new line with updated position
-        const newLine = createThickLine(
-          line.startPoint,
-          line.endPoint,
-          0xfe347e
-        );
-        if (sceneRef.current) sceneRef.current.add(newLine);
-        line.mesh = newLine;
-      }
+      // Create new line with updated position
+      const newLine = createThickLine(line.startPoint, line.endPoint, 0xfe347e);
+      sceneRef?.current?.add(newLine);
+      line.mesh = newLine;
     });
-
-    // Remove lines that are out of bounds
-    linesToRemove.reverse().forEach((index) => {
-      linesRef.current.splice(index, 1);
-    });
-
-    // If all lines are removed, create new lines
-    if (linesRef.current.length === 0) {
-      currentLineCountRef.current++;
-      makeLine(sceneRef.current, 1); // Always spawn one laser at a time
-    }
   };
 
   useEffect(() => {
@@ -560,7 +569,8 @@ const SurfaceWithUser = () => {
     scene.add(user);
     userRef.current = user;
 
-    makeLine(scene, 1);
+    // Initialize with just the first laser
+    makeLine(scene);
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const RADIUS = 10;
