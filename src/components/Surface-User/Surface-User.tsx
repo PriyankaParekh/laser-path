@@ -10,7 +10,7 @@ const SurfaceWithUser = () => {
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const userRef = useRef<THREE.Group | null>(null);
-  const gridRef = useRef<THREE.GridHelper | null>(null);
+  const gridRef = useRef<THREE.Object3D | null>(null);
   const linesRef = useRef<any[]>([]);
   const speedRef = useRef({ x: 0.05, z: 0.05 });
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
@@ -22,7 +22,10 @@ const SurfaceWithUser = () => {
   });
   const [isKeyPressedAllowed, setIskeyPressedAllowed] = useState<any>(true);
   const timerMeshRef = useRef<any>(null);
-  const currentLineCountRef = useRef<number>(1); // Add this line to track current line count
+  const currentLineCountRef = useRef<number>(1);
+  const lastLaserDirectionRef = useRef<"left-to-right" | "right-to-left">(
+    "left-to-right"
+  );
 
   const particlesRef = useRef<THREE.Points | null>(null);
   const isUserAliveRef = useRef<boolean>(true);
@@ -151,24 +154,35 @@ const SurfaceWithUser = () => {
 
     // Create new lines
     for (let i = 0; i < num; i++) {
-      let startPoint = {
-        x: randomIntFromInterval(-10, 10),
+      const GRID_SIZE = 10;
+
+      // Create a vertical line at the right edge
+      const startPoint = {
+        x: GRID_SIZE,
         y: 0,
-        z: randomIntFromInterval(-10, 10),
+        z: -GRID_SIZE, // Top of the box
       };
-      let endPoint = {
-        x: randomIntFromInterval(-10, 10),
+
+      const endPoint = {
+        x: GRID_SIZE,
         y: 0,
-        z: randomIntFromInterval(-10, 10),
+        z: GRID_SIZE, // Bottom of the box
       };
+
       const thickLine = createThickLine(startPoint, endPoint, 0xc30010);
       scene.add(thickLine);
+
+      // Move only in X direction (towards left)
+      const speed = {
+        x: -0.1, // Move left
+        z: 0, // No vertical movement
+      };
 
       linesRef.current.push({
         mesh: thickLine,
         startPoint: startPoint,
         endPoint: endPoint,
-        speed: { x: speedRef.current.x * (Math.random() > 0.5 ? 1 : -1) },
+        speed: speed,
       });
     }
   };
@@ -179,9 +193,9 @@ const SurfaceWithUser = () => {
       new THREE.Vector3(endPoint.x, endPoint.y, endPoint.z)
     );
 
-    const tubeGeometry = new THREE.TubeGeometry(curve, 20, 0.15, 8, false);
-
-    const sphereGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+    const thickness = 0.2; // Consistent thickness for the laser
+    const tubeGeometry = new THREE.TubeGeometry(curve, 20, thickness, 8, false);
+    const sphereGeometry = new THREE.SphereGeometry(thickness * 2, 16, 16);
     const material = new THREE.MeshPhongMaterial({
       color: color,
       shininess: 100,
@@ -211,6 +225,7 @@ const SurfaceWithUser = () => {
     if (!sceneRef.current) return;
 
     const linesToRemove: number[] = [];
+    const GRID_SIZE = 10;
 
     linesRef.current.forEach((line, index) => {
       // Remove old line
@@ -220,13 +235,8 @@ const SurfaceWithUser = () => {
       line.startPoint.x += line.speed.x;
       line.endPoint.x += line.speed.x;
 
-      // Check boundaries
-      if (
-        line.startPoint.x >= 10 ||
-        line.startPoint.x <= -10 ||
-        line.endPoint.x >= 10 ||
-        line.endPoint.x <= -10
-      ) {
+      // Check if laser has reached the left edge
+      if (line.startPoint.x < -GRID_SIZE) {
         linesToRemove.push(index);
       } else {
         // Create new line with updated position
@@ -245,14 +255,14 @@ const SurfaceWithUser = () => {
       linesRef.current.splice(index, 1);
     });
 
-    // If all lines are removed, increment count and create new lines
+    // If all lines are removed, create new lines
     if (linesRef.current.length === 0) {
       if (currentLineCountRef.current < 10) {
         currentLineCountRef.current++;
       } else {
-        currentLineCountRef.current = 1; // Reset to 1 when reaching 10
+        currentLineCountRef.current = 1;
       }
-      makeLine(sceneRef.current, currentLineCountRef.current);
+      makeLine(sceneRef.current, 1); // Always spawn one laser at a time
     }
   };
 
@@ -275,13 +285,13 @@ const SurfaceWithUser = () => {
     cameraRef.current = camera;
 
     // Initialize renderer
-    let renderer:any;
+    let renderer: any;
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
     } catch (error) {
-      console.error('WebGL Renderer failed:', error);
-      alert('Your browser or device does not support WebGL.');
+      console.error("WebGL Renderer failed:", error);
+      alert("Your browser or device does not support WebGL.");
     }
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -290,11 +300,16 @@ const SurfaceWithUser = () => {
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
+    // Initialize scene setup in useEffect
     // Add grid with plane
     const gridHelper = new THREE.GridHelper(20, 20, 0x2cff05, 0x808080);
     const gridPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(20, 20),
-      new THREE.MeshBasicMaterial({ visible: false })
+      new THREE.MeshBasicMaterial({
+        color: 0x2cff05,
+        transparent: true,
+        opacity: 0.1,
+      })
     );
     gridPlane.rotateX(-Math.PI / 2);
     gridPlane.name = "gridPlane";
@@ -355,7 +370,7 @@ const SurfaceWithUser = () => {
       "https://threejs.org/examples/fonts/helvetiker_regular.typeface.json",
       (font) => {
         const createTimerText = (time: number): THREE.Group => {
-          console.log('hi');
+          console.log("hi");
           const minutes = Math.floor(time / 60);
           const remainingSeconds = time % 60;
           if (minutes === 0 && remainingSeconds === 0) {
@@ -493,20 +508,33 @@ const SurfaceWithUser = () => {
     makeLine(scene, 1);
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      const GRID_SIZE = 10;
+      const RADIUS = 10;
       if (isKeyPressedAllowed) {
         const newPosition = { ...userPositionRef.current };
+        const moveDistance = 0.1;
+
         if (event.key === "ArrowRight") {
-          newPosition.x = Math.min(newPosition.x + 0.1, GRID_SIZE);
+          newPosition.x = Math.min(newPosition.x + moveDistance, RADIUS);
         } else if (event.key === "ArrowLeft") {
-          newPosition.x = Math.max(newPosition.x - 0.1, -GRID_SIZE);
+          newPosition.x = Math.max(newPosition.x - moveDistance, -RADIUS);
         } else if (event.key === "ArrowUp") {
-          newPosition.z = Math.max(newPosition.z - 0.1, -GRID_SIZE);
+          newPosition.z = Math.max(newPosition.z - moveDistance, -RADIUS);
         } else if (event.key === "ArrowDown") {
-          newPosition.z = Math.min(newPosition.z + 0.1, GRID_SIZE);
+          newPosition.z = Math.min(newPosition.z + moveDistance, RADIUS);
         } else if (event.key === " ") {
           jump();
         }
+
+        // Ensure the player stays within the circular boundary
+        const distanceFromCenter = Math.sqrt(
+          newPosition.x * newPosition.x + newPosition.z * newPosition.z
+        );
+        if (distanceFromCenter > RADIUS) {
+          const angle = Math.atan2(newPosition.z, newPosition.x);
+          newPosition.x = RADIUS * Math.cos(angle);
+          newPosition.z = RADIUS * Math.sin(angle);
+        }
+
         userPositionRef.current = newPosition;
       }
     };
@@ -602,7 +630,7 @@ const SurfaceWithUser = () => {
   useEffect(() => {
     if (!isUserAlive) {
       setTimeout(() => {
-        navigate(`/exit?score=${currentLineCountRef.current}`); 
+        navigate(`/exit?score=${currentLineCountRef.current}`);
       }, 500);
     }
   }, [isUserAlive, navigate]);

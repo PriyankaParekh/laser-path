@@ -1,4 +1,4 @@
-import AvatarExamples from "./components/Avatar/Avatar";
+import AvatarExamples from "./components/Avatar/CustomAvatar";
 import GameOver from "./components/Game-Over";
 import SurfaceWithUser from "./components/Surface-User/Surface-User";
 import { Routes, Route } from "react-router-dom";

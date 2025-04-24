@@ -1,30 +1,43 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
-interface AvatarProps {
-  avatarStyle: {
-    bodyColor: string;
-    accessoryColor: string;
-    type: any;
-    scale?: number;
-  };
-  position?: { x: number; y: number; z: number };
-}
+const AvatarExamples = () => {
+  const mountRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
-const CustomAvatar = ({
-  avatarStyle,
-  position = { x: 0, y: 0, z: 0 },
-}: AvatarProps) => {
-  const avatarRef = useRef<THREE.Group | null>(null);
+  const avatarStyles = [
+    {
+      bodyColor: "#4A90E2",
+      accessoryColor: "#50E3C2",
+      type: "robot",
+      scale: 1,
+    },
+    {
+      bodyColor: "#F5A623",
+      accessoryColor: "#4A4A4A",
+      type: "human",
+      scale: 1,
+    },
+    {
+      bodyColor: "#7ED321",
+      accessoryColor: "#9013FE",
+      type: "alien",
+      scale: 1,
+    },
+  ];
 
+  // Create robot avatar
   const createRobotAvatar = (bodyColor: string, accessoryColor: string) => {
     const group = new THREE.Group();
 
     // Robot Head
     const headGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-    const headMaterial = new THREE.MeshPhongMaterial({
+    const headMaterial = new THREE.MeshStandardMaterial({
       color: bodyColor,
-      //@ts-ignore
       metalness: 0.8,
       roughness: 0.2,
     });
@@ -79,15 +92,14 @@ const CustomAvatar = ({
     return group;
   };
 
+  // Create human avatar
   const createHumanAvatar = (bodyColor: string, accessoryColor: string) => {
     const group = new THREE.Group();
 
     // Human Head
     const headGeometry = new THREE.SphereGeometry(0.5, 32, 32);
-    const headMaterial = new THREE.MeshPhongMaterial({
+    const headMaterial = new THREE.MeshStandardMaterial({
       color: bodyColor,
-      //@ts-ignore
-
       roughness: 0.7,
     });
     const head = new THREE.Mesh(headGeometry, headMaterial);
@@ -103,10 +115,8 @@ const CustomAvatar = ({
       0,
       Math.PI / 2
     );
-    const hairMaterial = new THREE.MeshPhongMaterial({
+    const hairMaterial = new THREE.MeshStandardMaterial({
       color: accessoryColor,
-      //@ts-ignore
-
       roughness: 1,
     });
     const hair = new THREE.Mesh(hairGeometry, hairMaterial);
@@ -139,15 +149,14 @@ const CustomAvatar = ({
     return group;
   };
 
+  // Create alien avatar
   const createAlienAvatar = (bodyColor: string, accessoryColor: string) => {
     const group = new THREE.Group();
 
     // Alien Head (elongated)
     const headGeometry = new THREE.SphereGeometry(0.4, 32, 32);
-    const headMaterial = new THREE.MeshPhongMaterial({
+    const headMaterial = new THREE.MeshStandardMaterial({
       color: bodyColor,
-      //@ts-ignore
-
       metalness: 0.3,
       roughness: 0.7,
     });
@@ -157,10 +166,8 @@ const CustomAvatar = ({
 
     // Large Alien Eyes
     const eyeGeometry = new THREE.SphereGeometry(0.15, 32, 32);
-    const eyeMaterial = new THREE.MeshPhongMaterial({
+    const eyeMaterial = new THREE.MeshStandardMaterial({
       color: accessoryColor,
-      //@ts-ignore
-
       metalness: 0.8,
       roughness: 0.2,
     });
@@ -210,54 +217,142 @@ const CustomAvatar = ({
   };
 
   useEffect(() => {
-    if (avatarRef.current) {
-      // Remove existing avatar if it exists
-      const parent = avatarRef.current.parent;
-      if (parent) {
-        parent.remove(avatarRef.current);
+    if (!mountRef.current) return;
+
+    // Initialize scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#f0f0f0");
+    sceneRef.current = scene;
+
+    // Initialize camera
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+    camera.position.set(0, 2, 10);
+    cameraRef.current = camera;
+
+    // Initialize renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    mountRef.current.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    // Add orbit controls for better interaction
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Add lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(5, 5, 5);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    scene.add(directionalLight);
+
+    // Add a ground plane for better perspective
+    const groundGeometry = new THREE.PlaneGeometry(20, 20);
+    const groundMaterial = new THREE.MeshStandardMaterial({
+      color: 0xcccccc,
+      side: THREE.DoubleSide,
+      roughness: 0.8,
+    });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = Math.PI / 2;
+    ground.position.y = -0.5;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Create and add avatars to the scene
+    avatarStyles.forEach((style, index) => {
+      let avatar;
+      switch (style.type) {
+        case "robot":
+          avatar = createRobotAvatar(style.bodyColor, style.accessoryColor);
+          break;
+        case "human":
+          avatar = createHumanAvatar(style.bodyColor, style.accessoryColor);
+          break;
+        case "alien":
+          avatar = createAlienAvatar(style.bodyColor, style.accessoryColor);
+          break;
+        default:
+          avatar = createHumanAvatar(style.bodyColor, style.accessoryColor);
       }
-    }
 
-    // Create new avatar based on style
-    let avatar;
-    switch (avatarStyle.type) {
-      case "robot":
-        avatar = createRobotAvatar(
-          avatarStyle.bodyColor,
-          avatarStyle.accessoryColor
-        );
-        break;
-      case "human":
-        avatar = createHumanAvatar(
-          avatarStyle.bodyColor,
-          avatarStyle.accessoryColor
-        );
-        break;
-      case "alien":
-        avatar = createAlienAvatar(
-          avatarStyle.bodyColor,
-          avatarStyle.accessoryColor
-        );
-        break;
-      default:
-        avatar = createHumanAvatar(
-          avatarStyle.bodyColor,
-          avatarStyle.accessoryColor
-        );
-    }
+      if (avatar) {
+        // Apply scale if provided
+        if (style.scale) {
+          avatar.scale.set(style.scale, style.scale, style.scale);
+        }
 
-    // Apply scale if provided
-    if (avatarStyle.scale) {
-      avatar.scale.set(avatarStyle.scale, avatarStyle.scale, avatarStyle.scale);
-    }
+        // Position the avatar
+        avatar.position.set(index * 3 - 3, 0, 0); // Center the avatars
 
-    // Set position
-    avatar.position.set(position.x, position.y, position.z);
+        // Enable shadows
+        avatar.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            object.castShadow = true;
+            object.receiveShadow = true;
+          }
+        });
 
-    avatarRef.current = avatar;
-  }, [avatarStyle, position]);
+        scene.add(avatar);
+      }
+    });
 
-  return null;
+    // Animation loop
+    const animate = () => {
+      if (!sceneRef.current || !cameraRef.current || !rendererRef.current)
+        return;
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+
+      // Update controls
+      controls.update();
+
+      rendererRef.current.render(sceneRef.current, cameraRef.current);
+    };
+
+    animate();
+
+    // Handle window resize
+    const handleResize = () => {
+      if (!cameraRef.current || !rendererRef.current) return;
+
+      cameraRef.current.aspect = window.innerWidth / window.innerHeight;
+      cameraRef.current.updateProjectionMatrix();
+      rendererRef.current.setSize(window.innerWidth, window.innerHeight);
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    // Cleanup
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+
+      if (rendererRef.current && mountRef.current) {
+        mountRef.current.removeChild(rendererRef.current.domElement);
+      }
+
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  return (
+    <div ref={mountRef} style={{ width: "100%", height: "100vh" }}>
+      {/* Three.js will render here */}
+    </div>
+  );
 };
 
-export default CustomAvatar;
+export default AvatarExamples;
