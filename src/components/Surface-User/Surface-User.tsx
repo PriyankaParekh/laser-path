@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { FontLoader } from "three/examples/jsm/loaders/FontLoader";
 import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry";
 import { useNavigate } from "react-router-dom";
+import { createJokerAvatar } from "../Avatar/custom-avatars-use-case";
 
 type LaserType =
   | "right-to-left"
@@ -26,7 +27,7 @@ const SurfaceWithUser = () => {
   const userRef = useRef<THREE.Group | null>(null);
   const gridRef = useRef<THREE.Object3D | null>(null);
   const linesRef = useRef<LaserLine[]>([]);
-  const speedRef = useRef({ x: 0.05, z: 0.05 });
+
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2());
   const userPositionRef = useRef<{ x: number; y: number; z: number }>({
@@ -37,9 +38,6 @@ const SurfaceWithUser = () => {
   const [isKeyPressedAllowed, setIskeyPressedAllowed] = useState<any>(true);
   const timerMeshRef = useRef<any>(null);
   const currentLineCountRef = useRef<number>(1);
-  const lastLaserDirectionRef = useRef<"left-to-right" | "right-to-left">(
-    "left-to-right"
-  );
 
   const particlesRef = useRef<THREE.Points | null>(null);
   const isUserAliveRef = useRef<boolean>(true);
@@ -267,10 +265,6 @@ const SurfaceWithUser = () => {
     lineGroup.add(endSphere);
 
     return lineGroup;
-  }
-
-  function randomIntFromInterval(min: number, max: number) {
-    return Math.floor(Math.random() * (max - min + 1) + min);
   }
 
   const animateLines = () => {
@@ -532,42 +526,12 @@ const SurfaceWithUser = () => {
     // Add fog
     scene.fog = new THREE.Fog(0x000000, 40, 40);
 
-    // Add user
-    const material = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      metalness: 0.1,
-      roughness: 0.5,
-    });
-
-    // User geometry
-    const headGeometry = new THREE.SphereGeometry(0.5, 32, 32);
-    const head = new THREE.Mesh(headGeometry, material);
-    head.position.y = 2;
-
-    const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1.5, 32);
-    const body = new THREE.Mesh(bodyGeometry, material);
-
-    const armGeometry = new THREE.CylinderGeometry(0.15, 0.15, 1, 32);
-    const leftArm = new THREE.Mesh(armGeometry, material);
-    leftArm.position.set(-0.75, 1.25, 0);
-    leftArm.rotation.z = Math.PI / 4;
-
-    const rightArm = new THREE.Mesh(armGeometry, material);
-    rightArm.position.set(0.75, 1.25, 0);
-    rightArm.rotation.z = -Math.PI / 4;
-
-    const legGeometry = new THREE.CylinderGeometry(0.2, 0.2, 1, 32);
-    const leftLeg = new THREE.Mesh(legGeometry, material);
-    leftLeg.position.set(-0.3, -0.75, 0);
-
-    const rightLeg = new THREE.Mesh(legGeometry, material);
-    rightLeg.position.set(0.3, -0.75, 0);
-
-    const user = new THREE.Group();
-    user.add(head, body, leftArm, rightArm, leftLeg, rightLeg);
-    user.position.set(0, 0, 0);
-    scene.add(user);
-    userRef.current = user;
+    // User
+    // const alien = createAlienAvatar("#7ED321", "#9013FE");
+    const joker = createJokerAvatar();
+    joker.position.set(0, 0, 0);
+    scene.add(joker);
+    userRef.current = joker;
 
     // Initialize with just the first laser
     makeLine(scene);
