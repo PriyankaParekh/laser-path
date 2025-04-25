@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 const GameOver = () => {
@@ -7,6 +7,18 @@ const GameOver = () => {
   const queryParams = new URLSearchParams(location.search);
   const score = queryParams.get("score");
   const isWin = queryParams.get("win") === "true";
+  const [fireworkCount, setFireworkCount] = useState(3); // Control number of fireworks
+
+  useEffect(() => {
+    if (isWin) {
+      // Create new fireworks periodically
+      const interval = setInterval(() => {
+        setFireworkCount((prev) => (prev % 3) + 1); // Cycle between 1-3 fireworks
+      }, 2000); // Match with animation duration
+
+      return () => clearInterval(interval);
+    }
+  }, [isWin]);
 
   const onReplay = () => {
     navigate("/");
@@ -19,6 +31,12 @@ const GameOver = () => {
 
   return (
     <div className="game-over-container">
+      <div className="modal-backdrop">
+        {isWin &&
+          Array.from({ length: fireworkCount }).map((_, index) => (
+            <div key={`firework-${index}`} className="firework" />
+          ))}
+      </div>
       <div className="game-over-card">
         <h1 className="game-over-title">{isWin ? "You Won!" : "Game Over"}</h1>
         <p className="game-over-score">
