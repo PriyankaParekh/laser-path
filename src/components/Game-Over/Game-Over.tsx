@@ -6,6 +6,7 @@ const GameOver = () => {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const score = queryParams.get("score");
+  const isWin = queryParams.get("win") === "true";
 
   const onReplay = () => {
     navigate("/");
@@ -19,7 +20,7 @@ const GameOver = () => {
   return (
     <div className="game-over-container">
       <div className="game-over-card">
-        <h1 className="game-over-title">Game Over</h1>
+        <h1 className="game-over-title">{isWin ? "You Won!" : "Game Over"}</h1>
         <p className="game-over-score">
           Your Score: <span>{score}</span>
         </p>

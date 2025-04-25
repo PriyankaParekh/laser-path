@@ -41,7 +41,9 @@ const SurfaceWithUser = () => {
   });
   const [isKeyPressedAllowed, setIskeyPressedAllowed] = useState<any>(true);
   const timerMeshRef = useRef<any>(null);
-  const currentLineCountRef = useRef<number>(1);
+  const currentLineCountRef = useRef<number>(0);
+  const [score, setScore] = useState<number>(0);
+  const [hasWon, setHasWon] = useState<boolean>(false);
 
   const particlesRef = useRef<THREE.Points | null>(null);
   const isUserAliveRef = useRef<boolean>(true);
@@ -292,6 +294,8 @@ const SurfaceWithUser = () => {
             line.endPoint.x = GRID_SIZE;
             hasReachedEndRef.current.add("right-to-left");
             makeLine(sceneRef.current); // Try to spawn next laser
+            currentLineCountRef.current += 1;
+            setScore(currentLineCountRef.current);
           }
           break;
         case "left-to-right":
@@ -299,7 +303,9 @@ const SurfaceWithUser = () => {
             line.startPoint.x = -GRID_SIZE;
             line.endPoint.x = -GRID_SIZE;
             hasReachedEndRef.current.add("left-to-right");
-            makeLine(sceneRef.current); // Try to spawn next laser
+            makeLine(sceneRef.current);
+            currentLineCountRef.current += 1;
+            setScore(currentLineCountRef.current);
           }
           break;
         case "top-to-bottom":
@@ -308,6 +314,8 @@ const SurfaceWithUser = () => {
             line.endPoint.z = -GRID_SIZE;
             hasReachedEndRef.current.add("top-to-bottom");
             makeLine(sceneRef.current); // Try to spawn next laser
+            currentLineCountRef.current += 1;
+            setScore(currentLineCountRef.current);
           }
           break;
         case "bottom-to-top":
@@ -315,6 +323,8 @@ const SurfaceWithUser = () => {
             line.startPoint.z = GRID_SIZE;
             line.endPoint.z = GRID_SIZE;
             hasReachedEndRef.current.add("bottom-to-top");
+            currentLineCountRef.current += 1;
+            setScore(currentLineCountRef.current);
           }
           break;
       }
@@ -616,93 +626,85 @@ const SurfaceWithUser = () => {
         const createTimerText = (time: number): THREE.Group => {
           const minutes = Math.floor(time / 60);
           const remainingSeconds = time % 60;
-          if (minutes === 0 && remainingSeconds === 0) {
-            setIskeyPressedAllowed(false);
-          }
           const timeString = `${minutes
             .toString()
             .padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
 
+          if (minutes === 0 && remainingSeconds === 0) {
+            if (isUserAliveRef.current) {
+              setHasWon(true);
+              setIskeyPressedAllowed(false);
+            }
+          }
+
           const group = new THREE.Group();
 
           // Create the circular box (cyan border, dark background)
-          const boxGeometry = new THREE.CircleGeometry(50, 64); // Radius = 50, smooth edges
+          const boxGeometry = new THREE.CircleGeometry(50, 64);
           const borderMaterial = new THREE.MeshBasicMaterial({
             color: 0x00ffff,
-          }); // Cyan color for border
+          });
 
           const borderMesh = new THREE.Mesh(boxGeometry, borderMaterial);
 
           // Inner dark circle for background with slight transparency
-          const innerCircleGeometry = new THREE.CircleGeometry(45, 64); // Slightly smaller for border effect
+          const innerCircleGeometry = new THREE.CircleGeometry(45, 64);
           const backgroundMaterial = new THREE.MeshBasicMaterial({
             color: 0x000033,
             transparent: true,
             opacity: 0.8,
-          }); // Dark blue background
+          });
           const innerCircleMesh = new THREE.Mesh(
             innerCircleGeometry,
             backgroundMaterial
           );
 
-          // Position the inner circle slightly inward
-          innerCircleMesh.position.set(0, 0, 0.1); // Ensures it's layered above the border
+          innerCircleMesh.position.set(0, 0, 0.1);
           borderMesh.add(innerCircleMesh);
 
-          // Add text in the center of the circle
           const textGeometry = new TextGeometry(timeString, {
-            font: font, // Ensure font is preloaded
-            size: 15, // Text size
-            depth: 1, // Flat text
+            font: font,
+            size: 15,
+            depth: 1,
           });
-          const textMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff }); // Cyan text color
+          const textMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
           const textMesh = new THREE.Mesh(textGeometry, textMaterial);
 
-          // Center text in the circle
           textGeometry.computeBoundingBox();
           if (textGeometry.boundingBox) {
             const textWidth =
               textGeometry.boundingBox.max.x - textGeometry.boundingBox.min.x;
             const textHeight =
               textGeometry.boundingBox.max.y - textGeometry.boundingBox.min.y;
-            textMesh.position.set(-textWidth / 2, -textHeight / 2, 0.2); // Center text
+            textMesh.position.set(-textWidth / 2, -textHeight / 2, 0.2);
           }
 
-          // Group the components together
           group.add(borderMesh);
           group.add(textMesh);
 
-          // Position the timer box in the top right corner
           group.position.set(
             window.innerWidth / 2 - 100,
             window.innerHeight / 2 - 100,
             0
-          ); // Adjust padding as needed
+          );
 
           return group;
         };
 
-        const timerMesh = createTimerText(60); // Start with 1 minute (60 seconds)
+        let timerMesh = createTimerText(60);
         timerScene.add(timerMesh);
         timerMeshRef.current = timerMesh;
 
-        // Update timer mesh when time changes
-        const updateTimer = (time: number) => {
-          if (timerMeshRef.current) {
-            timerScene.remove(timerMeshRef.current);
-            timerMeshRef.current = createTimerText(time);
-            timerScene.add(timerMeshRef.current);
-          }
-        };
-
-        // Countdown logic
-        let countdownTime = 60; // Start with 1 minute (60 seconds)
+        let countdownTime = 60;
         const timerInterval = setInterval(() => {
-          if (countdownTime > 0) {
-            countdownTime -= 1; // Decrement the time
-            updateTimer(countdownTime);
+          if (countdownTime > 0 && isUserAliveRef.current && !hasWon) {
+            countdownTime -= 1;
+            timerScene.remove(timerMeshRef.current);
+            timerMesh = createTimerText(countdownTime);
+            timerScene.add(timerMesh);
+            timerMeshRef.current = timerMesh;
           } else {
-            clearInterval(timerInterval); // Stop the timer when it reaches 0
+            clearInterval(timerInterval);
           }
         }, 1000);
 
@@ -910,18 +912,30 @@ const SurfaceWithUser = () => {
       scene.clear();
     };
     //eslint-disable-next-line
-  }, []);
+  }, [hasWon]);
 
   useEffect(() => {
     if (!isUserAlive) {
       setTimeout(() => {
-        navigate(`/exit?score=${currentLineCountRef.current}`);
+        navigate(`/exit?score=${score}`);
       }, 500);
     }
-  }, [isUserAlive, navigate]);
+  }, [isUserAlive, navigate, score]);
+
+  useEffect(() => {
+    if (hasWon) {
+      setTimeout(() => {
+        navigate(`/exit?score=${score}&win=true`);
+      }, 500);
+    }
+  }, [hasWon, navigate, score]);
+
   return (
     <div className="relative w-full h-screen">
       <div ref={mountRef} className="w-full h-full" />
+      <div className="absolute top-4 left-4 text-white text-2xl font-bold">
+        Score: {score}
+      </div>
     </div>
   );
 };
